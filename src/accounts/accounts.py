@@ -3,10 +3,11 @@ import logging
 import configparser
 from logging.handlers import RotatingFileHandler
 from order.order import Order
+import csv
 
 # loading configuration file
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read('/Users/puberoy/.etrade/config.ini')
 
 # logger settings
 logger = logging.getLogger('my_logger')
@@ -28,7 +29,43 @@ class Accounts:
         self.session = session
         self.account = {}
         self.base_url = base_url
+        self.accounts = []
 
+    def readaccounts(self):
+         # URL for the API endpoint
+        url = self.base_url + "/v1/accounts/list.json"
+
+        # Make API call for GET request
+        response = self.session.get(url, header_auth=True)
+        logger.debug("Request Header: %s", response.request.headers)
+
+        # Handle and parse response
+        if response is not None and response.status_code == 200:
+            parsed = json.loads(response.text)
+            logger.debug("Response Body: %s", json.dumps(parsed, indent=4, sort_keys=True))
+
+            data = response.json()
+            if data is not None and "AccountListResponse" in data and "Accounts" in data["AccountListResponse"] \
+                    and "Account" in data["AccountListResponse"]["Accounts"]:
+                self.accounts = data["AccountListResponse"]["Accounts"]["Account"]
+    
+    def writeCSV(self, list):
+        with open('port.csv', 'w', newline='') as csvfile:
+            fieldnames = ['accountIdKey', 'symbolDescription', 'quantity', 'lastTrade', 'pricePaid', 'totalGain', 'marketValue',  'totalGainPct', 'daysGainPct', 'daysGain']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+            writer.writeheader()
+            for port in list:
+                writer.writerow(port)
+
+    def printPorfolio(self):
+        self.readaccounts()
+        port = []
+        for account in self.accounts:
+            print("Account", account["accountId"], account["accountDesc"] )
+            self.account = account 
+            port += self.portfolio()
+        self.writeCSV(port)
+        
     def account_list(self):
         """
         Calls account list API to retrieve a list of the user's E*TRADE accounts
@@ -116,7 +153,7 @@ class Accounts:
         logger.debug("Request Header: %s", response.request.headers)
 
         print("\nPortfolio:")
-
+        port = []
         # Handle and parse response
         if response is not None and response.status_code == 200:
             parsed = json.loads(response.text)
@@ -127,7 +164,11 @@ class Accounts:
                 # Display balance information
                 for acctPortfolio in data["PortfolioResponse"]["AccountPortfolio"]:
                     if acctPortfolio is not None and "Position" in acctPortfolio:
+
                         for position in acctPortfolio["Position"]:
+                            pos = position
+                            pos["accountIdKey"] = self.account["accountIdKey"]
+                            port.append(pos)
                             print_str = ""
                             if position is not None and "symbolDescription" in position:
                                 print_str = print_str + "Symbol: " + str(position["symbolDescription"])
@@ -170,6 +211,7 @@ class Accounts:
                 print("Error: " + response.json()["Error"]["message"])
             else:
                 print("Error: Portfolio API service error")
+        return port 
 
     def balance(self):
         """

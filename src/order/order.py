@@ -4,10 +4,11 @@ from logging.handlers import RotatingFileHandler
 import configparser
 import random
 import re
-
+import csv 
+import pdb
 # loading configuration file
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read('/Users/puberoy/.etrade/config.ini')
 
 # logger settings
 logger = logging.getLogger('my_logger')
@@ -36,7 +37,108 @@ class Order:
 
         # User's order selection
         order = self.user_select_order()
+        self.previewOrdercommon(order)
 
+    def placeOrder(self, order):
+        url = self.base_url + "/v1/accounts/" + self.account["accountIdKey"] + "/orders/place.json"
+
+        # Add parameters and header information
+        headers = {"Content-Type": "application/xml", "consumerKey": config["DEFAULT"]["CONSUMER_KEY"]}
+
+        # Add payload for POST Request
+        payload = """<PlaceOrderRequest>
+                       <orderType>EQ</orderType>
+                       <clientOrderId>{0}</clientOrderId>
+                       <Order>
+                           <allOrNone>false</allOrNone>
+                           <priceType>{1}</priceType>
+                           <orderTerm>{2}</orderTerm>
+                           <marketSession>REGULAR</marketSession>
+                           <stopPrice></stopPrice>
+                           <limitPrice>{3}</limitPrice>
+                           <Instrument>
+                               <Product>
+                                   <securityType>EQ</securityType>
+                                   <symbol>{4}</symbol>
+                               </Product>
+                               <orderAction>{5}</orderAction>
+                               <quantityType>QUANTITY</quantityType>
+                               <quantity>{6}</quantity>
+                           </Instrument>
+                       </Order>
+                        <PreviewIds>
+                            <previewId>{7}</previewId>
+                        </PreviewIds>
+                   </PlaceOrderRequest>"""
+        payload = payload.format(order["client_order_id"], order["price_type"], order["order_term"],
+                                 order["limit_price"], order["symbol"], order["order_action"], order["quantity"],
+                                 order['previewId'])
+
+        # Make API call for POST request
+        response = self.session.post(url, header_auth=True, headers=headers, data=payload)
+        logger.debug("Request Header: %s", response.request.headers)
+        logger.debug("Request payload: %s", payload)
+        # Handle and parse response
+        if response is not None and response.status_code == 200:
+            parsed = json.loads(response.text)            
+            logger.debug("Response Body: %s", json.dumps(parsed, indent=4, sort_keys=True))
+            data = response.json()
+            print("\n\nPlace Order:")
+            if data is not None and "PlaceOrderResponse" in data and "OrderIds" in data["PlaceOrderResponse"]:
+                for previewids in data["PlaceOrderResponse"]["OrderIds"]:
+                    print("Order ID: " + str(previewids["orderId"]))
+            else:
+                # Handle errors
+                data = response.json()
+                if 'Error' in data and 'message' in data["Error"] and data["Error"]["message"] is not None:
+                    print("Error: " + data["Error"]["message"])
+                else:
+                    print("Error: Order API service error")
+
+            if data is not None and "PlaceOrderResponse" in data and "Order" in data["PlaceOrderResponse"]:
+                for orders in data["PlaceOrderResponse"]["Order"]:
+                    order["limitPrice"] = orders["limitPrice"]
+
+                    if orders is not None and "Instrument" in orders:
+                        for instrument in orders["Instrument"]:
+                            if instrument is not None and "orderAction" in instrument:
+                                print("Action: " + instrument["orderAction"])
+                            if instrument is not None and "quantity" in instrument:
+                                print("Quantity: " + str(instrument["quantity"]))
+                            if instrument is not None and "Product" in instrument \
+                                    and "symbol" in instrument["Product"]:
+                                print("Symbol: " + instrument["Product"]["symbol"])
+                            if instrument is not None and "symbolDescription" in instrument:
+                                print("Description: " + str(instrument["symbolDescription"]))
+
+                if orders is not None and "priceType" in orders and "limitPrice" in orders:
+                    print("Price Type: " + orders["priceType"])
+                    if orders["priceType"] == "MARKET":
+                        print("Price: MKT")
+                    else:
+                        print("Price: " + str(orders["limitPrice"]))
+                if orders is not None and "orderTerm" in orders:
+                    print("Duration: " + orders["orderTerm"])
+                if orders is not None and "estimatedCommission" in orders:
+                    print("Estimated Commission: " + str(orders["estimatedCommission"]))
+                if orders is not None and "estimatedTotalAmount" in orders:
+                    print("Estimated Total Cost: " + str(orders["estimatedTotalAmount"]))
+            else:
+                # Handle errors
+                data = response.json()
+                if 'Error' in data and 'message' in data["Error"] and data["Error"]["message"] is not None:
+                    print("Error: " + data["Error"]["message"])
+                else:
+                    print("Error: Order API service error")
+        else:
+            # Handle errors
+            data = response.json()
+            if 'Error' in data and 'message' in data["Error"] and data["Error"]["message"] is not None:
+                print("Error: " + data["Error"]["message"])
+            else:
+                print("Error: Order API service error")
+
+    def previewOrdercommon(self, order):
         # URL for the API endpoint
         url = self.base_url + "/v1/accounts/" + self.account["accountIdKey"] + "/orders/preview.json"
 
@@ -72,7 +174,7 @@ class Order:
         response = self.session.post(url, header_auth=True, headers=headers, data=payload)
         logger.debug("Request Header: %s", response.request.headers)
         logger.debug("Request payload: %s", payload)
-
+        prevID = ""
         # Handle and parse response
         if response is not None and response.status_code == 200:
             parsed = json.loads(response.text)
@@ -83,6 +185,7 @@ class Order:
             if data is not None and "PreviewOrderResponse" in data and "PreviewIds" in data["PreviewOrderResponse"]:
                 for previewids in data["PreviewOrderResponse"]["PreviewIds"]:
                     print("Preview ID: " + str(previewids["previewId"]))
+                    prevID = str(previewids["previewId"])
             else:
                 # Handle errors
                 data = response.json()
@@ -133,7 +236,7 @@ class Order:
                 print("Error: " + data["Error"]["message"])
             else:
                 print("Error: Preview Order API service error")
-
+        return prevID
     def previous_order(self, session, account, prev_orders):
         """
         Calls preview order API based on a list of previous orders
@@ -385,6 +488,32 @@ class Order:
                 return options_select
             else:
                 print("Unknown Option Selected!")
+
+    def doOrder(self, account, sym, action, quantity):
+        self.account = account
+        order = {"price_type": "MARKET",
+                 "order_term": "GOOD_FOR_DAY",
+                 "symbol": sym,
+                 "order_action": action,
+                 "limit_price":"100",
+                 "quantity": quantity}
+        order["client_order_id"] = random.randint(1000000000, 9999999999)
+        print("PLACE ORDER:", order)
+        order['previewId'] = self.previewOrdercommon(order)
+        self.placeOrder(order)
+    def readCSV(self):
+        all = []
+        with open('orders.csv', newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                print(row['symbolDescription'], row['quantity'], row['action'])
+                if ('action' in row and row['action'] != "None"):
+                    all.append(row)
+        print ("ALL ORDERS", all)
+
+        for order in all: 
+            self.doOrder({'accountIdKey': order['accountIdKey']}, order['symbolDescription'], order['action'], order['quantity'])
+        return all
 
     def user_select_order(self):
         """

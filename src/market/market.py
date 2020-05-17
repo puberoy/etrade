@@ -17,6 +17,9 @@ class Market:
         self.session = session
         self.base_url = base_url
 
+    def symquote(self, symbols):
+        return self.quoteCommon(symbols)
+
     def quotes(self):
         """
         Calls quotes API to provide quote details for equities, options, and mutual funds
@@ -24,9 +27,12 @@ class Market:
         :param self: Passes authenticated session in parameter
         """
         symbols = input("\nPlease enter Stock Symbol: ")
+        return self.quoteCommon(symbols)
 
+    def quoteCommon(self, symbols):
         # URL for the API endpoint
         url = self.base_url + "/v1/market/quote/" + symbols + ".json"
+        price = -1 
 
         # Make API call for GET request
         response = self.session.get(url)
@@ -50,6 +56,7 @@ class Market:
                         print("Security Type: " + quote["Product"]["securityType"])
                     if quote is not None and "All" in quote and "lastTrade" in quote["All"]:
                         print("Last Price: " + str(quote["All"]["lastTrade"]))
+                        price = quote["All"]["lastTrade"]
                     if quote is not None and "All" in quote and "changeClose" in quote["All"] \
                         and "changeClosePercentage" in quote["All"]:
                         print("Today's Change: " + str('{:,.3f}'.format(quote["All"]["changeClose"])) + " (" +
@@ -80,3 +87,5 @@ class Market:
         else:
             logger.debug("Response Body: %s", response)
             print("Error: Quote API service error")
+        return price 
+        
