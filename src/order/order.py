@@ -54,7 +54,7 @@ class Order:
                            <priceType>{1}</priceType>
                            <orderTerm>{2}</orderTerm>
                            <marketSession>REGULAR</marketSession>
-                           <stopPrice></stopPrice>
+                           <stopPrice>{3}</stopPrice>
                            <limitPrice>{3}</limitPrice>
                            <Instrument>
                                <Product>
@@ -117,6 +117,8 @@ class Order:
                         print("Price: MKT")
                     else:
                         print("Price: " + str(orders["limitPrice"]))
+                        print("STOP Price: " + str(orders["stopPrice"]))
+
                 if orders is not None and "orderTerm" in orders:
                     print("Duration: " + orders["orderTerm"])
                 if orders is not None and "estimatedCommission" in orders:
@@ -154,7 +156,7 @@ class Order:
                            <priceType>{1}</priceType>
                            <orderTerm>{2}</orderTerm>
                            <marketSession>REGULAR</marketSession>
-                           <stopPrice></stopPrice>
+                           <stopPrice>{3}</stopPrice>
                            <limitPrice>{3}</limitPrice>
                            <Instrument>
                                <Product>
@@ -216,6 +218,8 @@ class Order:
                         print("Price: MKT")
                     else:
                         print("Price: " + str(orders["limitPrice"]))
+                        print("STOP Price: " + str(orders["stopPrice"]))
+
                 if orders is not None and "orderTerm" in orders:
                     print("Duration: " + orders["orderTerm"])
                 if orders is not None and "estimatedCommission" in orders:
@@ -408,13 +412,14 @@ class Order:
                                              "security_type": None,
                                              "symbol": None,
                                              "order_action": None,
+                                             "order_id": None, 
                                              "quantity": None}
                                 if order is not None and 'orderType' in order:
                                     order_obj["order_type"] = order["orderType"]
 
                                 if order is not None and 'orderId' in order:
                                     order_str += "Order #" + str(order["orderId"]) + " : "
-
+                                    order_obj["order_id"] = order["orderId"]
                                 if instrument is not None and 'Product' in instrument \
                                         and 'securityType' in instrument["Product"]:
                                     order_str += "Type: " + instrument["Product"]["securityType"] + " | "
@@ -440,6 +445,8 @@ class Order:
                                     order_str += "Term: " + details["orderTerm"] + " | "
                                     order_obj["order_term"] = details["orderTerm"]
 
+                                if details is not None and 'stopPrice' in details:
+                                    order_str += "Stop Price: " + str('${:,.2f}'.format(details["stopPrice"])) + " | "
                                 if details is not None and 'limitPrice' in details:
                                     order_str += "Price: " + str('${:,.2f}'.format(details["limitPrice"])) + " | "
                                     order_obj["limitPrice"] = details["limitPrice"]
@@ -489,30 +496,39 @@ class Order:
             else:
                 print("Unknown Option Selected!")
 
-    def doOrder(self, account, sym, action, quantity):
+    def doOrder(self, account, sym, action, quantity, ptype, limit):
         self.account = account
-        order = {"price_type": "MARKET",
-                 "order_term": "GOOD_FOR_DAY",
+        order = {"price_type": ptype,
+                 "order_term": "GOOD_UNTIL_CANCEL",
                  "symbol": sym,
                  "order_action": action,
-                 "limit_price":"100",
+                 "limit_price": limit,
                  "quantity": quantity}
         order["client_order_id"] = random.randint(1000000000, 9999999999)
         print("PLACE ORDER:", order)
         order['previewId'] = self.previewOrdercommon(order)
         self.placeOrder(order)
-    def readCSV(self):
+
+    def readCSV(self, setAll):
         all = []
-        with open('orders.csv', newline='') as csvfile:
+        FILENAME = 'orders.csv'
+        if (setAll):
+            FILENAME = 'port.csv'
+        with open(FILENAME, newline='') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 print(row['symbolDescription'], row['quantity'], row['action'])
-                if ('action' in row and row['action'] != "None"):
+                if (setAll):
+                    row['action'] = "SELL"
                     all.append(row)
+                else:
+                    if ('action' in row and row['action'] != "None"):
+                        all.append(row)
+                
         print ("ALL ORDERS", all)
 
         for order in all: 
-            self.doOrder({'accountIdKey': order['accountIdKey']}, order['symbolDescription'], order['action'], order['quantity'])
+            self.doOrder({'accountIdKey': order['accountIdKey']}, order['symbolDescription'], order['action'], order['quantity'], order['type'], order['price'])
         return all
 
     def user_select_order(self):
@@ -779,6 +795,74 @@ class Order:
                 else:
                     print("Error: Balance API service error")
                 break
+    def cancelOrder(self, orderid):
+                # URL for the API endpoint
+        url = self.base_url + "/v1/accounts/" + self.account["accountIdKey"] + "/orders/cancel.json"
+
+        # Add parameters and header information
+        headers = {"Content-Type": "application/xml", "consumerKey": config["DEFAULT"]["CONSUMER_KEY"]}
+
+        # Add payload for POST Request
+        payload = """<CancelOrderRequest>
+                        <orderId>{0}</orderId>
+                    </CancelOrderRequest>
+                    """
+        payload = payload.format(orderid)
+
+        # Add payload for PUT Request
+        response = self.session.put(url, header_auth=True, headers=headers, data=payload)
+        logger.debug("Request Header: %s", response.request.headers)
+        logger.debug("Request payload: %s", payload)
+
+        # Handle and parse response
+        if response is not None and response.status_code == 200:
+            parsed = json.loads(response.text)
+            logger.debug("Response Body: %s", json.dumps(parsed, indent=4, sort_keys=True))
+            data = response.json()
+            if data is not None and "CancelOrderResponse" in data \
+                    and "orderId" in data["CancelOrderResponse"]:
+                print("\nOrder number #" + str(
+                    data["CancelOrderResponse"]["orderId"]) + " successfully Cancelled.")
+            else:
+                # Handle errors
+                logger.debug("Response Headers: %s", response.headers)
+                logger.debug("Response Body: %s", response.text)
+                data = response.json()
+                if 'Error' in data and 'message' in data["Error"] \
+                        and data["Error"]["message"] is not None:
+                    print("Error: " + data["Error"]["message"])
+                else:
+                    print("Error: Cancel Order API service error")
+        else:
+            # Handle errors
+            logger.debug("Response Headers: %s", response.headers)
+            logger.debug("Response Body: %s", response.text)
+            data = response.json()
+            if 'Error' in data and 'message' in data["Error"] and data["Error"]["message"] is not None:
+                print("Error: " + data["Error"]["message"])
+            else:
+                print("Error: Cancel Order API service error")
+
+    def viewOpenOrder(self, account, cancel):
+        self.account = account
+        url = self.base_url + "/v1/accounts/" + self.account["accountIdKey"] + "/orders.json"
+        # Add parameters and header information
+        headers = {"consumerkey": config["DEFAULT"]["CONSUMER_KEY"]}
+        params_open = {"status": "OPEN"}
+        response_open = self.session.get(url, header_auth=True, params=params_open, headers=headers)
+        print("\nOpen Orders:")
+        # Handle and parse response
+        if response_open.status_code == 204:
+            logger.debug(response_open)
+            print("None")
+        elif response_open.status_code == 200:
+            parsed = json.loads(response_open.text)
+            logger.debug(json.dumps(parsed, indent=4, sort_keys=True))
+            data = response_open.json()
+            orders = self.print_orders(data, "open")
+            if cancel:
+                for order in orders:
+                    self.cancelOrder(order["order_id"])
 
     def view_orders(self):
         """
@@ -933,3 +1017,56 @@ class Order:
                 break
             else:
                 print("Unknown Option Selected!")
+"""
+
+Property	Type	Description	Possible Values
+orderNumber	integer	The numeric ID for this order in the E*TRADE system	
+accountId	string	The numeric account ID	
+previewTime	integer (int64)	The time of the order preview	
+placedTime	integer (int64)	The time the order was placed (UTC)	
+executedTime	integer (int64)	The time the order was executed (UTC)	
+orderValue	number	Total cost or proceeds, including commission	
+status	string	The status of the order	OPEN, EXECUTED, CANCELLED, INDIVIDUAL_FILLS, CANCEL_REQUESTED, EXPIRED, REJECTED, PARTIAL, OPTION_EXERCISE, OPTION_ASSIGNMENT, DO_NOT_EXERCISE, DONE_TRADE_EXECUTED, INVALID
+orderType	string	The type of order being placed	EQ, OPTN, SPREADS, BUY_WRITES, BUTTERFLY, IRON_BUTTERFLY, CONDOR, IRON_CONDOR, MF, MMF, BOND, CONTINGENT, ONE_CANCELS_ALL, ONE_TRIGGERS_ALL, ONE_TRIGGERS_OCO, OPTION_EXERCISE, OPTION_ASSIGNMENT, OPTION_EXPIRED, DO_NOT_EXERCISE, BRACKETED, INVALID
+orderTerm	string	The term for which the order is in effect	GOOD_UNTIL_CANCEL, GOOD_FOR_DAY, GOOD_TILL_DATE, IMMEDIATE_OR_CANCEL, FILL_OR_KILL, INVALID
+priceType	string	The type of pricing	MARKET, LIMIT, STOP, STOP_LIMIT, TRAILING_STOP_CNST_BY_LOWER_TRIGGER, UPPER_TRIGGER_BY_TRAILING_STOP_CNST, TRAILING_STOP_PRCT_BY_LOWER_TRIGGER, UPPER_TRIGGER_BY_TRAILING_STOP_PRCT, TRAILING_STOP_CNST, TRAILING_STOP_PRCT, HIDDEN_STOP, HIDDEN_STOP_BY_LOWER_TRIGGER, UPPER_TRIGGER_BY_HIDDEN_STOP, NET_DEBIT, NET_CREDIT, NET_EVEN, MARKET_ON_OPEN, MARKET_ON_CLOSE, LIMIT_ON_OPEN, LIMIT_ON_CLOSE, INVALID
+priceValue	string	The value of the price	
+limitPrice	number	The highest price at which to buy or the lowest price at which to sell if specified in a limit order	
+stopPrice	number	The designated boundary price for a stop order	
+stopLimitPrice	number	The designated boundary price for a stop-limit order	
+offsetType	string	Indicator to identify the trailing stop price type	TRAILING_STOP_CNST, TRAILING_STOP_PRCT
+offsetValue	number	The stop value for trailing stop price types	
+marketSession	string	The session in which the order will be placed	REGULAR, EXTENDED
+routingDestination	string	The exchange where the order should be executed. Users may want to specify this if they believe they can get a better order fill at a specific exchange rather than relying on the automatic order routing system.	AUTO, AMEX, BOX, CBOE, ISE, NOM, NYSE, PHX
+bracketedLimitPrice	number	The bracketed limit price	
+initialStopPrice	number	The initial stop price	
+trailPrice	number	The current trailing value. For trailing stop dollar orders, this is a fixed dollar amount. For trailing stop percentage orders, this is the price reflected by the percentage selected.	
+triggerPrice	number	The price that an advanced order will trigger. For example, if it is a $1 buy trailing stop, then the trigger price will be $1 above the last price.	
+conditionPrice	number	For a conditional order, the price the condition is being compared against	
+conditionSymbol	string	For a conditional order, the symbol that the condition is being compared against	
+conditionType	string	The type of comparison to be used in a conditional order	CONTINGENT_GTE, CONTINGENT_LTE
+conditionFollowPrice	string	In a conditional order, the type of price being followed	ASK, BID, LAST
+conditionSecurityType	string	The condition security type	
+replacedByOrderId	integer	In the event of a change order request, the order ID of the order that is replacing a prior order.	
+replacesOrderId	integer	In the event of a change order request, the order ID of the order that the new order is replacing.	
+allOrNone	boolean	If TRUE, the transactions specified in the order must be executed all at once or not at all; default is FALSE	
+previewId	integer (int64)	This parameter is required and must specify the numeric preview ID from the preview and the other parameters of this request must match the parameters of the preview.	
+instrument	array[Instrument]	The object for the instrument	
+messages	Messages	The object for the messages	
+preClearanceCode	string	The preclearance code	
+overrideRestrictedCd	integer (int32)	The overrides restricted code	
+investmentAmount	number (double)	The amount of the investment	
+positionQuantity	string	The position quantity	ENTIRE_POSITION, CASH, MARGIN, INVALID
+aipFlag	boolean	Indicator to identify if automated investment planning is turned on or off	
+egQual	string	Indicator of the execution guarantee of the order	EG_QUAL_UNSPECIFIED, EG_QUAL_QUALIFIED, EG_QUAL_NOT_IN_FORCE, EG_QUAL_NOT_A_MARKET_ORDER, EG_QUAL_NOT_AN_ELIGIBLE_SECURITY, EG_QUAL_INVALID_ORDER_TYPE, EG_QUAL_SIZE_NOT_QUALIFIED, EG_QUAL_OUTSIDE_GUARANTEED_PERIOD, EG_QUAL_INELIGIBLE_GATEWAY, EG_QUAL_INELIGIBLE_DUE_TO_IPO, EG_QUAL_INELIGIBLE_DUE_TO_SELF_DIRECTED, EG_QUAL_INELIGIBLE_DUE_TO_CHANGEORDER, INVALID
+reInvestOption	string	Indicator flag to specify whether to reinvest profit on mutual funds	REINVEST, DEPOSIT, CURRENT_HOLDING, INVALID
+estimatedCommission	number	The cost billed to the user to perform the requested action	
+estimatedFees	number	The estimated fees	
+estimatedTotalAmount	number	The cost or proceeds, including broker commission, resulting from the requested action	
+netPrice	number	The net price	
+netBid	number	The net bid	
+netAsk	number	The net ask	
+gcd	integer (int32)	The GCD	
+ratio	string	The ratio	
+mfpriceType	string	The mutual fund price type	
+"""

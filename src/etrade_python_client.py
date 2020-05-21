@@ -11,6 +11,8 @@ from logging.handlers import RotatingFileHandler
 from accounts.accounts import Accounts
 from market.market import Market
 from order.order import Order
+import pprint 
+pp = pprint.PrettyPrinter(indent=1)
 
 # loading configuration file
 config = configparser.ConfigParser()
@@ -55,7 +57,6 @@ def oauth():
 
     main_menu(session, base_url)
 
-
 def main_menu(session, base_url):
     """
     Provides the different options for the sample application: Market Quotes, Account List
@@ -70,12 +71,15 @@ def main_menu(session, base_url):
     ret = market.quoteCommon("vsat")
     print ("MARKET FOR VST", ret)
 
-    accounts.printPorfolio()
+    accountsList = accounts.printPorfolio()
+    for account in accountsList:
+        order.viewOpenOrder(account, False)
 
     menu_items = {"1": "Market Quotes",
                   "2": "Account List",
                   "3": "Place File order", 
-                  "4": "Exit"}
+                  "4": "Cancel all open orders",
+                  "5": "Exit"}
 
     while True:
         print("")
@@ -88,8 +92,11 @@ def main_menu(session, base_url):
         elif selection == "2":
             accounts.account_list()
         elif selection == "3":
-            order.readCSV()
+            order.readCSV(False)
         elif selection == "4":
+            for account in accountsList:
+                order.viewOpenOrder(account, True)
+        elif selection == "5":
             break
         else:
             print("Unknown Option Selected!")

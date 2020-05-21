@@ -4,6 +4,8 @@ import configparser
 from logging.handlers import RotatingFileHandler
 from order.order import Order
 import csv
+import pprint
+pp = pprint.PrettyPrinter(indent=1)
 
 # loading configuration file
 config = configparser.ConfigParser()
@@ -51,10 +53,14 @@ class Accounts:
     
     def writeCSV(self, list):
         with open('port.csv', 'w', newline='') as csvfile:
-            fieldnames = ['accountIdKey', 'symbolDescription', 'quantity', 'lastTrade', 'pricePaid', 'totalGain', 'marketValue',  'totalGainPct', 'daysGainPct', 'daysGain']
+            fieldnames = ['action', 'type', 'price', 'accountIdKey', 'symbolDescription', 'quantity', 'lastTrade', 'pricePaid', 'totalGain', 'marketValue',  'totalGainPct', 'daysGainPct', 'daysGain']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
             writer.writeheader()
             for port in list:
+                port['action'] = "None"
+                port['type'] = "STOP"
+                port['lastTrade']=port['Quick']['lastTrade']
+                port['price'] = int(port['Quick']['lastTrade'] * 95)/100
                 writer.writerow(port)
 
     def printPorfolio(self):
@@ -65,7 +71,8 @@ class Accounts:
             self.account = account 
             port += self.portfolio()
         self.writeCSV(port)
-        
+        return self.accounts 
+
     def account_list(self):
         """
         Calls account list API to retrieve a list of the user's E*TRADE accounts
