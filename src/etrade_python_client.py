@@ -68,8 +68,8 @@ def main_menu(session, base_url):
     accounts = Accounts(session, base_url)
     order = Order(session, {}, base_url)
 
-    ret = market.quoteCommon("vsat")
-    print ("MARKET FOR VST", ret)
+    # ret = market.quoteCommon("vsat")
+    # print ("MARKET FOR VST", ret)
 
     accountsList = accounts.printPorfolio()
     for account in accountsList:
@@ -79,7 +79,8 @@ def main_menu(session, base_url):
                   "2": "Account List",
                   "3": "Place File order", 
                   "4": "Cancel all open orders",
-                  "5": "Exit"}
+                  "5": "Cancel orders and redo on current price",
+                  "6": "Exit"}
 
     while True:
         print("")
@@ -97,6 +98,10 @@ def main_menu(session, base_url):
             for account in accountsList:
                 order.viewOpenOrder(account, True)
         elif selection == "5":
+            for account in accountsList:
+                order.viewOpenOrder(account, True)
+            order.readCSV(True)
+        elif selection == "6":
             break
         else:
             print("Unknown Option Selected!")

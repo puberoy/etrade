@@ -505,7 +505,6 @@ class Order:
                  "limit_price": limit,
                  "quantity": quantity}
         order["client_order_id"] = random.randint(1000000000, 9999999999)
-        print("PLACE ORDER:", order)
         order['previewId'] = self.previewOrdercommon(order)
         self.placeOrder(order)
 
@@ -517,16 +516,12 @@ class Order:
         with open(FILENAME, newline='') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                print(row['symbolDescription'], row['quantity'], row['action'])
                 if (setAll):
                     row['action'] = "SELL"
                     all.append(row)
                 else:
                     if ('action' in row and row['action'] != "None"):
                         all.append(row)
-                
-        print ("ALL ORDERS", all)
-
         for order in all: 
             self.doOrder({'accountIdKey': order['accountIdKey']}, order['symbolDescription'], order['action'], order['quantity'], order['type'], order['price'])
         return all
