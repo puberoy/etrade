@@ -5,6 +5,7 @@ import json
 import logging
 import configparser
 import sys
+import csv
 import requests
 from rauth import OAuth1Service
 from logging.handlers import RotatingFileHandler
@@ -57,6 +58,52 @@ def oauth():
 
     main_menu(session, base_url)
 
+    def writeCSV(self, list):
+        with open('port.csv', 'w', newline='') as csvfile:
+            fieldnames = ['action', 'type', 'price', 'accountIdKey', 'symbolDescription', 'quantity', 'lastTrade', 'pricePaid', 'totalGain', 'marketValue',  'totalGainPct', 'daysGainPct', 'daysGain']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+            writer.writeheader()
+            for port in list:
+                port['action'] = "None"
+                port['type'] = "STOP"
+                port['lastTrade']=port['Quick']['lastTrade']
+                port['price'] = int(port['Quick']['lastTrade'] * 95)/100
+                writer.writerow(port)
+
+def checkAccountOrder(act, ord):
+    with open('diff.csv', 'w', newline='') as csvfile:
+        fieldnames = ['action', 'type', 'price', 'accountIdKey', 'symbolDescription', 'quantity']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
+        writer.writeheader()
+
+        for accountId in act.keys():
+            port = act[accountId]
+            for stock in port:
+                sym = stock['symbolDescription']
+                quant = stock['quantity']
+                print("Look for %s %s %s " %(accountId, sym, quant)), 
+                foundSame = False 
+                for order in ord[accountId]:
+                    if (order['symbol']==sym and order['price_type']=='STOP'):
+                        if (order['quantity']==quant):
+                            foundSame = True 
+                        else:
+                            #cancel order
+                            print ("Cancel Order", sym, quant, order['quantity'])
+                            stock['action'] = 'CANCEL_ORDER'
+                            stock['type'] = "STOP"
+                            stock['price'] = order['order_id']
+                            writer.writerow(stock)
+                if (foundSame):
+                    print ("Nothing to do for", sym, quant)
+                else:
+                    print ("Generate new Order", sym, quant)
+                    stock['action'] = "SELL"
+                    stock['type'] = "STOP"
+                    stock['lastTrade']=stock['Quick']['lastTrade']
+                    stock['price'] = int(stock['Quick']['lastTrade'] * 95)/100                    
+                    writer.writerow(stock)
+
 def main_menu(session, base_url):
     """
     Provides the different options for the sample application: Market Quotes, Account List
@@ -71,16 +118,20 @@ def main_menu(session, base_url):
     # ret = market.quoteCommon("vsat")
     # print ("MARKET FOR VST", ret)
 
-    accountsList = accounts.printPorfolio()
+    accountsObj = accounts.printPorfolio()
+    accountsList = accountsObj['acct']
+    accountsPort = accountsObj['port']
+    ordersAcct = {}
     for account in accountsList:
-        order.viewOpenOrder(account, False)
-
+        ordersAcct[account['accountId']] = order.viewOpenOrder(account, False)
+    checkAccountOrder(accountsPort, ordersAcct)
     menu_items = {"1": "Market Quotes",
                   "2": "Account List",
                   "3": "Place File order", 
                   "4": "Cancel all open orders",
-                  "5": "Cancel orders and redo on current price",
-                  "6": "Exit"}
+                  "5": "Cancel ALL orders and redo on current price",
+                  "6": "redo diff orders",
+                  "7": "Exit"}
 
     while True:
         print("")
@@ -102,6 +153,8 @@ def main_menu(session, base_url):
                 order.viewOpenOrder(account, True)
             order.readCSV(True)
         elif selection == "6":
+            order.dodiff()
+        elif selection == "7":
             break
         else:
             print("Unknown Option Selected!")

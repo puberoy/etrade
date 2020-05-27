@@ -506,8 +506,25 @@ class Order:
                  "quantity": quantity}
         order["client_order_id"] = random.randint(1000000000, 9999999999)
         order['previewId'] = self.previewOrdercommon(order)
+        print ("PLace order", order)
         self.placeOrder(order)
 
+    def dodiff(self):
+        all = []
+        FILENAME = 'diff.csv'
+        with open(FILENAME, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for order in reader:
+                dumacct = {'accountIdKey': order['accountIdKey']}
+
+                if (order['action'] == "CANCEL_ORDER"):
+                    self.account = dumacct
+                    print ("Going to cancel", order['price'])
+                    self.cancelOrder(order['price'])
+                else:
+                    self.doOrder(dumacct, order['symbolDescription'], order['action'], order['quantity'], order['type'], order['price'])
+
+       
     def readCSV(self, setAll):
         all = []
         FILENAME = 'orders.csv'
@@ -858,7 +875,7 @@ class Order:
             if cancel:
                 for order in orders:
                     self.cancelOrder(order["order_id"])
-
+            return orders 
     def view_orders(self):
         """
         Calls orders API to provide the details for the orders

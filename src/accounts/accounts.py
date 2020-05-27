@@ -66,12 +66,15 @@ class Accounts:
     def printPorfolio(self):
         self.readaccounts()
         port = []
+        acctPort = {}
         for account in self.accounts:
             print("Account", account["accountId"], account["accountDesc"] )
             self.account = account 
-            port += self.portfolio()
+            onePort = self.portfolio()
+            port += onePort
+            acctPort[account["accountId"]] = onePort
         self.writeCSV(port)
-        return self.accounts 
+        return ({'acct': self.accounts, 'port': acctPort})
 
     def account_list(self):
         """
