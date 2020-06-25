@@ -81,23 +81,24 @@ def checkAccountOrder(act, ord):
             for stock in port:
                 sym = stock['symbolDescription']
                 quant = stock['quantity']
-                print("Look for %s %s %s " %(accountId, sym, quant)), 
+               # print("Look for %s %s %s " %(accountId, sym, quant)), 
                 foundSame = False 
-                for order in ord[accountId]:
-                    if (order['symbol']==sym and order['price_type']=='STOP'):
-                        if (order['quantity']==quant):
-                            foundSame = True 
-                        else:
-                            #cancel order
-                            print ("Cancel Order", sym, quant, order['quantity'])
-                            stock['action'] = 'CANCEL_ORDER'
-                            stock['type'] = "STOP"
-                            stock['price'] = order['order_id']
-                            writer.writerow(stock)
+                if ord[accountId] != None: 
+                    for order in ord[accountId]:
+                        if (order['symbol']==sym and order['price_type']=='STOP'):
+                            if (order['quantity']==quant):
+                                foundSame = True 
+                            else:
+                                #cancel order
+                                print ("Cancel Order", sym, quant, order['quantity'])
+                                stock['action'] = 'CANCEL_ORDER'
+                                stock['type'] = "STOP"
+                                stock['price'] = order['order_id']
+                                writer.writerow(stock)
                 if (foundSame):
-                    print ("Nothing to do for", sym, quant)
+                    print ("No Change For", sym, quant)
                 else:
-                    print ("Generate new Order", sym, quant)
+                    print ("*** Generate new Order", sym, quant)
                     stock['action'] = "SELL"
                     stock['type'] = "STOP"
                     stock['lastTrade']=stock['Quick']['lastTrade']
