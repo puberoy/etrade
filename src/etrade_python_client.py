@@ -9,12 +9,12 @@ import csv
 import requests
 from rauth import OAuth1Service
 from logging.handlers import RotatingFileHandler
-from accounts.accounts import Accounts
-from market.market import Market
-from order.order import Order
+from accounts import Accounts
+from market import Market
+from order import Order
 import pprint 
 pp = pprint.PrettyPrinter(indent=1)
-
+PERCENT=97
 # loading configuration file
 config = configparser.ConfigParser()
 config.read('/Users/puberoy/.etrade/config.ini')
@@ -67,7 +67,7 @@ def oauth():
                 port['action'] = "None"
                 port['type'] = "STOP"
                 port['lastTrade']=port['Quick']['lastTrade']
-                port['price'] = int(port['Quick']['lastTrade'] * 95)/100
+                port['price'] = int(port['Quick']['lastTrade'] * PERCENT)/100
                 writer.writerow(port)
 
 def checkAccountOrder(act, ord):
@@ -102,7 +102,7 @@ def checkAccountOrder(act, ord):
                     stock['action'] = "SELL"
                     stock['type'] = "STOP"
                     stock['lastTrade']=stock['Quick']['lastTrade']
-                    stock['price'] = int(stock['Quick']['lastTrade'] * 95)/100                    
+                    stock['price'] = int(stock['Quick']['lastTrade'] * PERCENT)/100                    
                     writer.writerow(stock)
 
 def main_menu(session, base_url):
@@ -119,7 +119,7 @@ def main_menu(session, base_url):
     # ret = market.quoteCommon("vsat")
     # print ("MARKET FOR VST", ret)
 
-    accountsObj = accounts.printPorfolio()
+    accountsObj = accounts.printPorfolio(PERCENT)
     accountsList = accountsObj['acct']
     accountsPort = accountsObj['port']
     ordersAcct = {}

@@ -2,7 +2,7 @@ import json
 import logging
 import configparser
 from logging.handlers import RotatingFileHandler
-from order.order import Order
+from order import Order
 import csv
 import pprint
 pp = pprint.PrettyPrinter(indent=1)
@@ -51,7 +51,7 @@ class Accounts:
                     and "Account" in data["AccountListResponse"]["Accounts"]:
                 self.accounts = data["AccountListResponse"]["Accounts"]["Account"]
     
-    def writeCSV(self, list):
+    def writeCSV(self, list, percent):
         with open('port.csv', 'w', newline='') as csvfile:
             fieldnames = ['action', 'type', 'price', 'accountIdKey', 'symbolDescription', 'quantity', 'lastTrade', 'pricePaid', 'totalGain', 'marketValue',  'totalGainPct', 'daysGainPct', 'daysGain']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
@@ -60,10 +60,10 @@ class Accounts:
                 port['action'] = "None"
                 port['type'] = "STOP"
                 port['lastTrade']=port['Quick']['lastTrade']
-                port['price'] = int(port['Quick']['lastTrade'] * 95)/100
+                port['price'] = int(port['Quick']['lastTrade'] * percent)/100
                 writer.writerow(port)
 
-    def printPorfolio(self):
+    def printPorfolio(self,percent):
         self.readaccounts()
         port = []
         acctPort = {}
@@ -73,7 +73,7 @@ class Accounts:
             onePort = self.portfolio()
             port += onePort
             acctPort[account["accountId"]] = onePort
-        self.writeCSV(port)
+        self.writeCSV(port, percent)
         return ({'acct': self.accounts, 'port': acctPort})
 
     def account_list(self):
